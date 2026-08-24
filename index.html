@@ -1,0 +1,868 @@
+<!-- JARVIS — voice-reactive AI core with memory -->
+<div id="jarvis-root">
+  <div class="scanlines"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">J</span>
+      <span class="brand-text">J.A.R.V.I.S.</span>
+    </div>
+    <div class="topbar-right">
+      <select id="voiceSelect" class="voice-select" title="Choose Jarvis's voice"></select>
+      <button id="nextVoiceBtn" class="ghost-btn" title="Hear the next available voice">TRY NEXT VOICE</button>
+      <button id="clearBtn" class="ghost-btn" title="Forget everything">RESET</button>
+      <button id="connectBtn" class="connect-btn">
+        <span class="dot" id="connectDot"></span>
+        CONNECT APPS
+      </button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <svg id="rings" viewBox="0 0 600 600" class="rings-svg">
+      <defs>
+        <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#BFF3FF" stop-opacity="0.95"/>
+          <stop offset="45%" stop-color="#1FB6FF" stop-opacity="0.55"/>
+          <stop offset="100%" stop-color="#1FB6FF" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="softBlur" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="6"/>
+        </filter>
+      </defs>
+
+      <g id="tickRing" class="tick-ring"></g>
+
+      <circle id="ringOuter" cx="300" cy="300" r="230" class="ring ring-outer"/>
+      <circle id="ringMid"   cx="300" cy="300" r="180" class="ring ring-mid"/>
+      <circle id="ringInner" cx="300" cy="300" r="140" class="ring ring-inner"/>
+
+      <g id="bars"></g>
+
+      <circle cx="300" cy="300" r="150" fill="url(#coreGlow)" filter="url(#softBlur)"/>
+      <circle id="core" cx="300" cy="300" r="72" class="core"/>
+      <circle id="coreRim" cx="300" cy="300" r="72" class="core-rim"/>
+    </svg>
+
+    <button id="micBtn" class="mic-hit" aria-label="Toggle listening"></button>
+
+    <div class="status">
+      <div class="status-label" id="statusLabel">STANDBY</div>
+      <div class="status-sub" id="statusSub">Tap the core and speak, or type below</div>
+    </div>
+
+    <div class="transcript" id="transcript"></div>
+
+    <div class="type-row">
+      <input id="typeInput" class="type-input" type="text" placeholder="Type to J.A.R.V.I.S. …" autocomplete="off"/>
+      <button type="button" id="sendBtn" class="type-send">SEND</button>
+    </div>
+  </main>
+
+  <div id="overlay" class="overlay"></div>
+  <aside id="panel" class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">CONNECTED SERVICES</div>
+        <div class="panel-sub">Give J.A.R.V.I.S. context and let it act for you</div>
+      </div>
+      <button id="closePanel" class="close-btn">&times;</button>
+    </div>
+    <div class="panel-list" id="panelList"></div>
+    <div class="panel-note">
+      Toggles here are remembered, but nothing is wired to a real account in this preview —
+      turning one on just tells J.A.R.V.I.S. to talk as if it has that context.
+    </div>
+  </aside>
+</div>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  #jarvis-root{
+    --bg-0:#02050a;
+    --blue-0:#12B8FF;
+    --blue-1:#8FE9FF;
+    --blue-dim:#0B3B57;
+    --amber:#FF9B4A;
+    --text-hi:#E4F7FF;
+    --text-lo:#5C8AA3;
+    --line:rgba(143,233,255,0.16);
+
+    position:relative;
+    width:100%;
+    min-height:720px;
+    background:
+      radial-gradient(ellipse 900px 500px at 50% 15%, rgba(18,184,255,0.10), transparent 60%),
+      radial-gradient(ellipse 700px 700px at 50% 100%, rgba(18,184,255,0.06), transparent 60%),
+      var(--bg-0);
+    color:var(--text-hi);
+    font-family:'Rajdhani', sans-serif;
+    overflow:hidden;
+    border-radius:12px;
+    isolation:isolate;
+  }
+
+  #jarvis-root::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:44px 44px;
+    opacity:0.22;
+    mask-image:radial-gradient(ellipse 70% 60% at 50% 40%, black, transparent 75%);
+    pointer-events:none;
+  }
+
+  .scanlines{
+    position:absolute; inset:0;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 3px);
+    pointer-events:none;
+    opacity:0.5;
+    z-index:5;
+  }
+
+  .topbar{
+    position:relative; z-index:2;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:22px 28px 0 28px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{
+    width:28px; height:28px; border-radius:50%;
+    border:1.5px solid var(--blue-0);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Orbitron', sans-serif; font-weight:700; font-size:13px;
+    color:var(--blue-1);
+    box-shadow:0 0 14px rgba(18,184,255,0.55);
+  }
+  .brand-text{
+    font-family:'Orbitron', sans-serif; font-weight:700; font-size:13px;
+    letter-spacing:0.28em; color:var(--blue-1);
+  }
+
+  .topbar-right{ display:flex; align-items:center; gap:10px; }
+
+  .voice-select{
+    background:rgba(18,184,255,0.06); border:1px solid var(--blue-dim); color:var(--text-hi);
+    font-family:'Rajdhani', sans-serif; font-weight:600; font-size:11px; letter-spacing:0.04em;
+    padding:8px 10px; border-radius:999px; cursor:pointer; max-width:150px;
+    outline:none;
+  }
+  .voice-select:hover{ border-color:var(--blue-0); }
+
+  .ghost-btn{
+    background:transparent; border:1px solid var(--blue-dim); color:var(--text-lo);
+    font-family:'Rajdhani', sans-serif; font-weight:600; letter-spacing:0.12em; font-size:11px;
+    padding:8px 12px; border-radius:999px; cursor:pointer;
+    transition:border-color .2s ease, color .2s ease;
+  }
+  .ghost-btn:hover{ border-color:var(--amber); color:var(--amber); }
+
+  .connect-btn{
+    display:flex; align-items:center; gap:9px;
+    background:rgba(18,184,255,0.06);
+    border:1px solid var(--blue-dim);
+    color:var(--text-hi);
+    font-family:'Rajdhani', sans-serif;
+    font-weight:600; letter-spacing:0.12em; font-size:12px;
+    padding:9px 16px; border-radius:999px;
+    cursor:pointer;
+    transition:border-color .2s ease, background .2s ease, transform .15s ease;
+  }
+  .connect-btn:hover{ border-color:var(--blue-0); background:rgba(18,184,255,0.14); transform:translateY(-1px); }
+  .connect-btn .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--text-lo);
+    transition:background .2s ease, box-shadow .2s ease;
+  }
+  .connect-btn .dot.active{ background:#57E38F; box-shadow:0 0 8px #57E38F; }
+
+  .stage{
+    position:relative; z-index:2;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:6px 20px 28px;
+  }
+
+  .rings-svg{ width:min(58vw, 380px); height:min(58vw, 380px); overflow:visible; }
+
+  .tick-ring line{ stroke:var(--blue-dim); stroke-width:1.5; }
+  .tick-ring line.long{ stroke:var(--blue-0); opacity:0.65; }
+
+  .ring{
+    fill:none;
+    stroke:var(--blue-0);
+    stroke-opacity:0.55;
+    stroke-width:1;
+    transform-origin:300px 300px;
+  }
+  .ring-outer{ stroke-dasharray:2 10; animation:spin 60s linear infinite; }
+  .ring-mid{ stroke-dasharray:1 6; animation:spin 40s linear infinite reverse; }
+  .ring-inner{ stroke-dasharray:5 3; opacity:0.4; }
+
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  #bars line{
+    stroke:var(--blue-1);
+    stroke-width:2.5;
+    stroke-linecap:round;
+    opacity:0.85;
+  }
+
+  .core{
+    fill:var(--blue-1);
+    filter:drop-shadow(0 0 20px rgba(143,233,255,0.9));
+    transition:r .08s ease-out, fill .3s ease;
+  }
+  .core.thinking{ fill:var(--amber); filter:drop-shadow(0 0 20px rgba(255,155,74,0.7)); }
+  .core-rim{
+    fill:none; stroke:var(--text-hi); stroke-width:1.5; opacity:0.5;
+  }
+
+  .mic-hit{
+    position:absolute;
+    width:130px; height:130px; border-radius:50%;
+    background:transparent; border:none; cursor:pointer;
+    top:44%; left:50%; transform:translate(-50%, -50%);
+  }
+
+  .status{ margin-top:2px; text-align:center; }
+  .status-label{
+    font-family:'Orbitron', sans-serif; font-weight:700; font-size:15px;
+    letter-spacing:0.3em; color:var(--blue-1);
+    text-shadow:0 0 10px rgba(143,233,255,0.5);
+  }
+  .status-sub{
+    margin-top:6px; font-size:13px; color:var(--text-lo); letter-spacing:0.02em;
+    font-family:'Space Mono', monospace;
+  }
+
+  .transcript{
+    width:min(90%, 460px);
+    max-height:150px;
+    overflow-y:auto;
+    margin-top:16px;
+    display:flex; flex-direction:column; gap:8px;
+    font-family:'Space Mono', monospace;
+    font-size:12.5px;
+    line-height:1.5;
+    padding-right:4px;
+  }
+  .line{ display:flex; gap:8px; }
+  .line .who{ flex:none; opacity:0.6; }
+  .line.user .who{ color:var(--text-lo); }
+  .line.jarvis .who{ color:var(--blue-1); }
+  .line .txt{ color:var(--text-hi); }
+
+  .type-row{
+    margin-top:16px; display:flex; gap:8px; width:min(90%, 460px);
+  }
+  .type-input{
+    flex:1; background:rgba(255,255,255,0.03); border:1px solid var(--blue-dim);
+    color:var(--text-hi); border-radius:8px; padding:10px 12px;
+    font-family:'Rajdhani', sans-serif; font-size:14px; outline:none;
+  }
+  .type-input:focus{ border-color:var(--blue-0); }
+  .type-send{
+    background:rgba(18,184,255,0.1); border:1px solid var(--blue-dim); color:var(--blue-1);
+    border-radius:8px; padding:0 16px; font-family:'Rajdhani', sans-serif; font-weight:700;
+    letter-spacing:0.08em; font-size:12px; cursor:pointer;
+  }
+  .type-send:hover{ border-color:var(--blue-0); }
+
+  .overlay{
+    position:absolute; inset:0; background:rgba(2,5,9,0.55);
+    opacity:0; pointer-events:none; transition:opacity .25s ease; z-index:8;
+    backdrop-filter:blur(2px);
+  }
+  .overlay.show{ opacity:1; pointer-events:auto; }
+
+  .panel{
+    position:absolute; top:0; right:0; height:100%;
+    width:min(86%, 340px);
+    background:linear-gradient(180deg, #061019, #04090f);
+    border-left:1px solid var(--line);
+    z-index:9;
+    transform:translateX(100%);
+    transition:transform .3s cubic-bezier(.2,.8,.2,1);
+    display:flex; flex-direction:column;
+    padding:22px 20px;
+    box-sizing:border-box;
+  }
+  .panel.show{ transform:translateX(0); }
+
+  .panel-head{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
+  .panel-title{
+    font-family:'Orbitron', sans-serif; font-size:12px; letter-spacing:0.18em; color:var(--blue-1);
+  }
+  .panel-sub{ font-size:12px; color:var(--text-lo); margin-top:6px; max-width:230px; line-height:1.4; }
+  .close-btn{
+    background:none; border:1px solid var(--blue-dim); color:var(--text-hi);
+    width:28px; height:28px; border-radius:50%; font-size:16px; line-height:1;
+    cursor:pointer;
+  }
+  .close-btn:hover{ border-color:var(--blue-0); }
+
+  .panel-list{ display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
+
+  .service-row{
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(255,255,255,0.02);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:12px 14px;
+  }
+  .service-info{ display:flex; align-items:center; gap:11px; }
+  .service-icon{
+    width:30px; height:30px; border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; background:rgba(18,184,255,0.08); border:1px solid var(--blue-dim);
+  }
+  .service-name{ font-weight:600; font-size:14px; }
+  .service-desc{ font-size:11px; color:var(--text-lo); margin-top:1px; }
+
+  .switch{
+    width:38px; height:21px; border-radius:999px;
+    background:rgba(255,255,255,0.08); border:1px solid var(--blue-dim);
+    position:relative; cursor:pointer; flex:none;
+    transition:background .2s ease, border-color .2s ease;
+  }
+  .switch.on{ background:rgba(87,227,143,0.25); border-color:#57E38F; }
+  .switch::after{
+    content:""; position:absolute; top:2px; left:2px;
+    width:15px; height:15px; border-radius:50%; background:var(--text-lo);
+    transition:transform .2s ease, background .2s ease;
+  }
+  .switch.on::after{ transform:translateX(17px); background:#57E38F; }
+
+  .panel-note{
+    margin-top:16px; font-size:11px; line-height:1.5; color:var(--text-lo);
+    border-top:1px solid var(--line); padding-top:14px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .ring-outer, .ring-mid{ animation:none; }
+  }
+</style>
+
+<script>
+(function(){
+  window.addEventListener('error', function(e){
+    try{
+      const s = document.getElementById('statusLabel');
+      const sub = document.getElementById('statusSub');
+      if(s){ s.textContent = 'SCRIPT ERROR'; }
+      if(sub){ sub.textContent = String(e.message || e).slice(0, 90); }
+      console.error('JARVIS script error:', e.error || e.message);
+    }catch(_){}
+  });
+
+  // Set this to YOUR Cloudflare Worker URL from jarvis-worker.js, e.g.:
+  //   const API_ENDPOINT = "https://round-boat-fece.heishmanporter.workers.dev";
+  const API_ENDPOINT = "https://round-boat-fece.heishmanporter.workers.dev";
+
+  const svgNS = "http://www.w3.org/2000/svg";
+  const tickRing = document.getElementById('tickRing');
+  const bars = document.getElementById('bars');
+  const core = document.getElementById('core');
+  const ringOuter = document.getElementById('ringOuter');
+  const ringMid = document.getElementById('ringMid');
+  const ringInner = document.getElementById('ringInner');
+  const micBtn = document.getElementById('micBtn');
+  const statusLabel = document.getElementById('statusLabel');
+  const statusSub = document.getElementById('statusSub');
+  const transcriptEl = document.getElementById('transcript');
+  const sendBtn = document.getElementById('sendBtn');
+  const typeInput = document.getElementById('typeInput');
+  const clearBtn = document.getElementById('clearBtn');
+
+  // ---------- geometry: tick ring + bars ----------
+  const cx = 300, cy = 300, rTick = 262;
+  for(let i=0;i<72;i++){
+    const angle = (i/72) * Math.PI*2;
+    const isLong = i % 6 === 0;
+    const len = isLong ? 14 : 7;
+    const x1 = cx + Math.cos(angle)*rTick;
+    const y1 = cy + Math.sin(angle)*rTick;
+    const x2 = cx + Math.cos(angle)*(rTick-len);
+    const y2 = cy + Math.sin(angle)*(rTick-len);
+    const line = document.createElementNS(svgNS,'line');
+    line.setAttribute('x1',x1); line.setAttribute('y1',y1);
+    line.setAttribute('x2',x2); line.setAttribute('y2',y2);
+    if(isLong) line.classList.add('long');
+    tickRing.appendChild(line);
+  }
+
+  const NUM_BARS = 48;
+  const barEls = [];
+  const barRadius = 200;
+  for(let i=0;i<NUM_BARS;i++){
+    const angle = (i/NUM_BARS) * Math.PI*2;
+    const x1 = cx + Math.cos(angle)*barRadius;
+    const y1 = cy + Math.sin(angle)*barRadius;
+    const line = document.createElementNS(svgNS,'line');
+    line.setAttribute('x1',x1); line.setAttribute('y1',y1);
+    line.setAttribute('x2',x1); line.setAttribute('y2',y1);
+    line.dataset.angle = angle;
+    line.dataset.x1 = x1; line.dataset.y1 = y1;
+    bars.appendChild(line);
+    barEls.push(line);
+  }
+
+  // ---------- visual state machine ----------
+  // modes: idle | listening | thinking | speaking
+  let mode = 'idle';
+  let rafId = null;
+  let t = 0;
+  let analyser, dataArray, audioCtx, micStream, micSource;
+
+  function updateVisual(level){
+    const coreR = 72 + level*26;
+    core.setAttribute('r', coreR.toFixed(1));
+    const outerR = 230 + level*14;
+    const midR = 180 + level*20;
+    const innerR = 140 + level*10;
+    ringOuter.setAttribute('r', outerR.toFixed(1));
+    ringMid.setAttribute('r', midR.toFixed(1));
+    ringInner.setAttribute('r', innerR.toFixed(1));
+    barEls.forEach((el, i)=>{
+      const angle = parseFloat(el.dataset.angle);
+      const barLen = 6 + level * 46 * (0.35 + 0.65*Math.random());
+      const x2 = cx + Math.cos(angle)*(200 + barLen);
+      const y2 = cy + Math.sin(angle)*(200 + barLen);
+      el.setAttribute('x2', x2.toFixed(1));
+      el.setAttribute('y2', y2.toFixed(1));
+      el.style.opacity = 0.35 + level*0.65;
+    });
+  }
+
+  function frame(){
+    t++;
+    let level = 0.03 + 0.02*Math.sin(t*0.03); // idle breathing
+    if(mode === 'listening' && analyser){
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for(let i=0;i<dataArray.length;i++) sum += dataArray[i];
+      const avg = sum / dataArray.length;
+      level = Math.min(1, (avg/255) * 2.4);
+    } else if(mode === 'thinking'){
+      level = 0.16 + 0.10*Math.sin(t*0.12);
+    } else if(mode === 'speaking'){
+      level = 0.25 + 0.22*Math.sin(t*0.22) + 0.12*Math.sin(t*0.5);
+      level = Math.max(0.08, Math.min(1, level));
+    }
+    updateVisual(level);
+    core.classList.toggle('thinking', mode === 'thinking');
+    rafId = requestAnimationFrame(frame);
+  }
+  frame();
+
+  async function ensureMic(){
+    if(micStream) return true;
+    try{
+      micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+      micSource = audioCtx.createMediaStreamSource(micStream);
+      micSource.connect(analyser);
+      return true;
+    }catch(e){
+      return false;
+    }
+  }
+
+  // ---------- speech recognition (speech-to-text) ----------
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let recognizing = false;
+  let continuousListening = false; // true from the moment the user taps the mic until they tap it again to stop
+
+  if(SR){
+    recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    recognition.onresult = (e)=>{
+      const text = e.results[0][0].transcript;
+      handleUserInput(text); // Jarvis will resume listening on its own once it finishes replying
+    };
+    recognition.onerror = (e)=>{
+      recognizing = false;
+      if(e.error === 'not-allowed' || e.error === 'audio-capture' || e.error === 'service-not-allowed'){
+        continuousListening = false;
+        setMode('idle');
+        setStatus('MIC ERROR', 'Microphone access was blocked \u2014 try typing instead');
+        return;
+      }
+      // recoverable hiccup (e.g. no-speech / network blip) — keep listening if still active
+      if(continuousListening){ startListeningCycle(); }
+      else { setMode('idle'); }
+    };
+    recognition.onend = ()=>{
+      recognizing = false;
+      // if recognition ended on its own (silence) but we're still meant to be listening
+      // and nothing is being processed/spoken right now, just restart it
+      if(continuousListening && mode === 'listening'){
+        startListeningCycle();
+      }
+    };
+  }
+
+  function startListeningCycle(){
+    if(!continuousListening) return;
+    setMode('listening');
+    try{
+      recognizing = true;
+      recognition.start();
+    }catch(e){ /* already running — fine */ }
+  }
+
+  function stopListeningCompletely(){
+    continuousListening = false;
+    if(recognition && recognizing){ recognition.stop(); }
+    setMode('idle');
+  }
+
+  micBtn.addEventListener('click', async ()=>{
+    if(continuousListening){
+      stopListeningCompletely();
+      return;
+    }
+    const ok = await ensureMic();
+    if(!ok){
+      setStatus('MIC BLOCKED', 'No microphone access here \u2014 type below instead');
+      return;
+    }
+    if(!SR){
+      setStatus('NO SPEECH INPUT', 'This browser can\u2019t transcribe speech \u2014 type below instead');
+      return;
+    }
+    continuousListening = true;
+    startListeningCycle();
+  });
+
+  function setMode(m){
+    mode = m;
+    if(m === 'idle') setStatus('STANDBY', 'Tap the core and speak, or type below');
+    else if(m === 'listening') setStatus('LISTENING', continuousListening ? 'Go ahead \u2014 tap the core again to stop' : 'Go ahead \u2014 I\u2019m listening');
+    else if(m === 'thinking') setStatus('PROCESSING', 'One moment');
+    else if(m === 'speaking') setStatus('SPEAKING', continuousListening ? 'I\u2019ll listen again once I\u2019m done' : '');
+  }
+  function setStatus(label, sub){
+    statusLabel.textContent = label;
+    statusSub.textContent = sub;
+  }
+
+  // ---------- text-to-speech ----------
+  const MALE_HINTS = /Ryan|Daniel|Arthur|Oliver|George|David|Mark|Guy|Male|James|Fred|Alex\b/i;
+  const FEMALE_HINTS = /Female|Samantha|Karen|Zira|Susan|Hazel|Fiona|Victoria|Serena|Kate|Emma|Amy|Joanna|Sonia|Libby|Moira|Tessa|Aria|Michelle|Ava|Jenny/i;
+
+  let cachedVoices = [];
+  let chosenVoiceURI = null; // manually picked from the dropdown — overrides auto-guessing entirely
+  const voiceSelect = document.getElementById('voiceSelect');
+
+  function populateVoiceSelect(){
+    if(!cachedVoices.length || !voiceSelect) return;
+    const englishVoices = cachedVoices.filter(v => /^en/i.test(v.lang));
+    const list = englishVoices.length ? englishVoices : cachedVoices;
+    voiceSelect.innerHTML = '<option value="">Auto</option>' +
+      list.map(v => `<option value="${v.voiceURI}">${v.name}</option>`).join('');
+    if(chosenVoiceURI && list.some(v => v.voiceURI === chosenVoiceURI)){
+      voiceSelect.value = chosenVoiceURI;
+    }
+  }
+
+  async function loadChosenVoice(){
+    try{
+      const res = await window.storage.get('jarvis-voice-uri');
+      chosenVoiceURI = (res && res.value) ? res.value : null;
+    }catch(e){ chosenVoiceURI = null; }
+    populateVoiceSelect();
+  }
+
+  if(voiceSelect){
+    voiceSelect.addEventListener('change', ()=>{
+      chosenVoiceURI = voiceSelect.value || null;
+      speak("This is what I sound like now.");
+      window.storage.set('jarvis-voice-uri', chosenVoiceURI || '').catch(()=>{});
+    });
+  }
+
+  const nextVoiceBtn = document.getElementById('nextVoiceBtn');
+  let cycleIndex = -1;
+  if(nextVoiceBtn){
+    nextVoiceBtn.addEventListener('click', ()=>{
+      const englishVoices = cachedVoices.filter(v => /^en/i.test(v.lang));
+      const list = englishVoices.length ? englishVoices : cachedVoices;
+      if(!list.length) return;
+      cycleIndex = (cycleIndex + 1) % list.length;
+      const v = list[cycleIndex];
+      chosenVoiceURI = v.voiceURI;
+      setStatus('PREVIEWING VOICE', v.name);
+      speak("This is what I sound like now.");
+      populateVoiceSelect();
+      window.storage.set('jarvis-voice-uri', chosenVoiceURI).catch(()=>{});
+    });
+  }
+
+  function refreshVoices(){
+    if('speechSynthesis' in window){
+      const v = speechSynthesis.getVoices();
+      if(v && v.length){
+        cachedVoices = v;
+        populateVoiceSelect();
+      }
+    }
+  }
+  refreshVoices();
+  if('speechSynthesis' in window){
+    speechSynthesis.onvoiceschanged = refreshVoices;
+  }
+  loadChosenVoice();
+
+  function pickVoice(voices){
+    // a manual pick from the dropdown always wins
+    if(chosenVoiceURI){
+      const manual = voices.find(v => v.voiceURI === chosenVoiceURI);
+      if(manual) return manual;
+    }
+    const priority = [
+      /Ryan.*Online.*Natural/i,
+      /Ryan/i,
+      /Google UK English Male/i,
+      /Daniel/i,
+      /Arthur/i, /Oliver/i, /George/i
+    ];
+    for(const pattern of priority){
+      const match = voices.find(v => pattern.test(v.name));
+      if(match) return match;
+    }
+    const gbMale = voices.find(v => /en-GB/i.test(v.lang) && MALE_HINTS.test(v.name) && !FEMALE_HINTS.test(v.name));
+    if(gbMale) return gbMale;
+    const enMale = voices.find(v => /^en/i.test(v.lang) && MALE_HINTS.test(v.name) && !FEMALE_HINTS.test(v.name));
+    if(enMale) return enMale;
+    const gbNotFemale = voices.find(v => /en-GB/i.test(v.lang) && !FEMALE_HINTS.test(v.name));
+    if(gbNotFemale) return gbNotFemale;
+    return voices.find(v => /^en/i.test(v.lang) && !FEMALE_HINTS.test(v.name)) || voices[0] || null;
+  }
+
+  function speak(text){
+    if(!('speechSynthesis' in window)){
+      if(continuousListening) startListeningCycle(); else setMode('idle');
+      return;
+    }
+    refreshVoices();
+    const utter = new SpeechSynthesisUtterance(text);
+    const chosen = pickVoice(cachedVoices);
+    if(chosen) utter.voice = chosen;
+    utter.rate = 0.95;
+    utter.pitch = 0.88;
+
+    // stay in "thinking" until audio actually begins, so the label never lies
+    utter.onstart = ()=> setMode('speaking');
+    utter.onend = ()=>{ if(continuousListening) startListeningCycle(); else setMode('idle'); };
+    utter.onerror = ()=>{ if(continuousListening) startListeningCycle(); else setMode('idle'); };
+
+    if(speechSynthesis.speaking || speechSynthesis.pending){
+      speechSynthesis.cancel();
+      setTimeout(()=> speechSynthesis.speak(utter), 50);
+    } else {
+      speechSynthesis.speak(utter);
+    }
+  }
+
+  // ---------- transcript UI ----------
+  function addLine(who, text){
+    const row = document.createElement('div');
+    row.className = 'line ' + (who === 'You' ? 'user' : 'jarvis');
+    row.innerHTML = `<span class="who">${who}:</span><span class="txt"></span>`;
+    row.querySelector('.txt').textContent = text;
+    transcriptEl.appendChild(row);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  // ---------- memory ----------
+  let history = []; // [{role:'user'|'assistant', content:'...'}]
+
+  async function loadMemory(){
+    try{
+      const res = await window.storage.get('jarvis-memory');
+      history = res ? JSON.parse(res.value) : [];
+    }catch(e){ history = []; }
+    history.slice(-12).forEach(m=>{
+      addLine(m.role === 'user' ? 'You' : 'J.A.R.V.I.S.', m.content);
+    });
+    if(history.length){
+      setStatus('STANDBY', 'Welcome back \u2014 I\u2019ve kept everything from before');
+    }
+  }
+
+  async function saveMemory(){
+    try{
+      const trimmed = history.slice(-40);
+      await window.storage.set('jarvis-memory', JSON.stringify(trimmed));
+    }catch(e){ /* best effort */ }
+  }
+
+  clearBtn.addEventListener('click', async ()=>{
+    history = [];
+    transcriptEl.innerHTML = '';
+    try{ await window.storage.delete('jarvis-memory'); }catch(e){}
+    setStatus('STANDBY', 'Memory cleared \u2014 starting fresh');
+  });
+
+  // ---------- connected services (context only, not functional) ----------
+  const SERVICES = [
+    {id:'email', name:'Email', desc:'Read & draft messages', icon:'\u2709\ufe0f'},
+    {id:'calendar', name:'Calendar', desc:'See events, schedule things', icon:'\ud83d\udcc5'},
+    {id:'notes', name:'Notes', desc:'Save and recall notes', icon:'\ud83d\udcdd'},
+    {id:'music', name:'Music', desc:'Play & control playback', icon:'\ud83c\udfb5'},
+    {id:'smarthome', name:'Smart Home', desc:'Lights, locks, thermostat', icon:'\ud83d\udca1'},
+    {id:'browser', name:'Browser', desc:'Open sites, look things up', icon:'\ud83c\udf10'},
+    {id:'tasks', name:'Tasks', desc:'Track your to-dos', icon:'\u2705'},
+    {id:'weather', name:'Weather', desc:'Local forecast on request', icon:'\u26c5'}
+  ];
+  let services = {};
+
+  function renderList(){
+    const panelList = document.getElementById('panelList');
+    panelList.innerHTML = '';
+    SERVICES.forEach(svc=>{
+      const row = document.createElement('div');
+      row.className = 'service-row';
+      row.innerHTML = `
+        <div class="service-info">
+          <div class="service-icon">${svc.icon}</div>
+          <div>
+            <div class="service-name">${svc.name}</div>
+            <div class="service-desc">${svc.desc}</div>
+          </div>
+        </div>
+        <div class="switch ${services[svc.id] ? 'on' : ''}" data-id="${svc.id}"></div>
+      `;
+      panelList.appendChild(row);
+    });
+    updateDot();
+  }
+  function updateDot(){
+    const anyOn = Object.values(services).some(Boolean);
+    document.getElementById('connectDot').classList.toggle('active', anyOn);
+  }
+  async function loadServices(){
+    try{
+      const res = await window.storage.get('jarvis-connected-services');
+      services = res ? JSON.parse(res.value) : {};
+    }catch(e){ services = {}; }
+    renderList();
+  }
+  async function saveServices(){
+    try{ await window.storage.set('jarvis-connected-services', JSON.stringify(services)); }catch(e){}
+  }
+  document.getElementById('panelList').addEventListener('click', (e)=>{
+    const sw = e.target.closest('.switch');
+    if(!sw) return;
+    const id = sw.dataset.id;
+    services[id] = !services[id];
+    sw.classList.toggle('on', services[id]);
+    updateDot();
+    saveServices();
+  });
+
+  function connectedSummary(){
+    const on = SERVICES.filter(s=>services[s.id]).map(s=>s.name);
+    return on.length ? on.join(', ') : 'none yet';
+  }
+
+  const overlay = document.getElementById('overlay');
+  const panel = document.getElementById('panel');
+  document.getElementById('connectBtn').addEventListener('click', ()=>{
+    overlay.classList.add('show'); panel.classList.add('show');
+  });
+  document.getElementById('closePanel').addEventListener('click', closePanelFn);
+  overlay.addEventListener('click', closePanelFn);
+  function closePanelFn(){ overlay.classList.remove('show'); panel.classList.remove('show'); }
+
+  // ---------- talking to Claude ----------
+  function buildSystemPrompt(){
+    return [
+      "You are J.A.R.V.I.S., a personal AI assistant in the style of the calm, dry-witted, impeccably formal AI butler from the Iron Man films \u2014 but you are your own assistant, not a copy of any script.",
+      "Voice: crisp, confident, understated British formality \u2014 calm and self-assured, never gushing, never robotic-sounding. Address the user respectfully (\u201csir\u201d or \u201cma'am\u201d is fine if it fits naturally, otherwise just speak plainly).",
+      "You DO have a real spoken voice \u2014 every reply you give is read aloud through text-to-speech, and the user hears you as an actual voice, not just text. Never claim you're text-only or that you have no audio output; you do.",
+      "Keep replies SHORT \u2014 1 to 3 sentences \u2014 since they are read aloud. No markdown, no bullet points, no asterisks, since this is spoken text.",
+      "If current web search results are provided to you in this system message, treat them as true and current, and answer naturally from them without saying the words 'search results'. If none are provided and the question needs current info, say plainly you don't have that information right now rather than guessing.",
+      "You currently have these 'connected' services (for context/roleplay only, none are actually wired up in this demo): " + connectedSummary() + ".",
+      "If asked to actually do something on a connected app or website, be honest that in this preview you can discuss it and plan it, but you can't yet perform real actions outside this conversation."
+    ].join(" ");
+  }
+
+  async function handleUserInput(text){
+    if(!text || !text.trim()) return;
+    typeInput.value = '';
+    addLine('You', text);
+    history.push({role:'user', content:text});
+    saveMemory();
+    setMode('thinking');
+
+    try{
+      const apiMessages = history
+        .filter(m=>m.role==='user' || m.role==='assistant')
+        .slice(-20)
+        .map(m=>({role:m.role, content:m.content}));
+
+      const response = await fetch(API_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          max_tokens: 400,
+          system: buildSystemPrompt(),
+          messages: apiMessages
+        })
+      });
+      const data = await response.json();
+
+      if(!response.ok || data.type === 'error'){
+        const msg = (data && data.error && data.error.message) || ('HTTP ' + response.status);
+        console.error('JARVIS API error:', data);
+        addLine('J.A.R.V.I.S. (error)', msg);
+        setStatus('API ERROR', msg.slice(0, 60));
+        if(continuousListening) startListeningCycle(); else setMode('idle');
+        return;
+      }
+
+      const reply = (data.content || [])
+        .filter(b => b.type === 'text')
+        .map(b => b.text)
+        .join('\n')
+        .trim() || "I\u2019m afraid I didn\u2019t catch a usable reply that time.";
+
+      addLine('J.A.R.V.I.S.', reply);
+      history.push({role:'assistant', content:reply});
+      saveMemory();
+      speak(reply);
+    }catch(err){
+      console.error('JARVIS fetch failed:', err);
+      addLine('J.A.R.V.I.S. (error)', String(err && err.message ? err.message : err));
+      setStatus('CONNECTION ERROR', 'Couldn\u2019t reach the model \u2014 see transcript above');
+      if(continuousListening) startListeningCycle(); else setMode('idle');
+    }
+  }
+
+  function trySend(){
+    if(mode === 'thinking' || mode === 'speaking') return;
+    handleUserInput(typeInput.value);
+  }
+  sendBtn.addEventListener('click', trySend);
+  typeInput.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      trySend();
+    }
+  });
+
+  loadMemory();
+  loadServices();
+})();
+</script>
